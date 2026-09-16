@@ -96,7 +96,9 @@ function pSetFieldValueText(v: unknown): string {
 
 function memberValueText(v: unknown): string {
   const m = v as MemberDef;
-  return `visible=${m.isVisible} enabled=${m.isEnabled} empty=${m.isEmpty}${m.type ? ` type=${m.type}` : ""}`;
+  const tokens = m.dataSource ? decodeOpaqueReferencedTokens(m.dataSource) : [];
+  const refPart = tokens.length ? ` 参照:[${tokens.join(", ")}]` : "";
+  return `visible=${m.isVisible} enabled=${m.isEnabled} empty=${m.isEmpty}${m.type ? ` type=${m.type}` : ""}${refPart}`;
 }
 
 function dsFieldValueText(v: unknown): string {
