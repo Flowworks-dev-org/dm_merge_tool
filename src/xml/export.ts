@@ -91,7 +91,11 @@ function findWrapperInMfo(mfo: Element, kind: "record" | "pset" | "direct", name
   return Array.from(mfo.querySelectorAll(`:scope > ${tag}`)).find((el) => el.getAttribute(attrName) === name) ?? null;
 }
 
-function buildObjectElement(doc: Document, o: MergedObject): Element {
+/**
+ * 統合元(isManualPair時は常に統合元優先で解決)をもとに、統合先の複製要素へ差分を適用する。
+ * 通常の書き出し処理だけでなく、同一ファイル内でのオブジェクト統合(pre-merge)でも再利用する。
+ */
+export function buildObjectElement(doc: Document, o: MergedObject): Element {
   const clone = doc.importNode(o.el, true) as Element;
   // 手動統合(オブジェクトの移動・統合)で作られた項目は、競合を常に統合元優先で自動解決する。
   const forceB = !!o.isManualPair;

@@ -1,4 +1,4 @@
-# IFC Data Manager 統合ツール(dm_merge_tool)
+# Vectorworks Data Manager 統合ツール(dm_merge_tool)
 
 Vectorworks の「データマネージャ」(IFCマッピング設定)から書き出したXMLを比較・統合するためのWebツール。
 
