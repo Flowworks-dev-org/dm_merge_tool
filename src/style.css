@@ -413,8 +413,17 @@ body {
 }
 .toolbar-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+  margin-right: 4px;
 }
 .sub-tabs {
   display: flex;

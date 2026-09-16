@@ -615,6 +615,7 @@ export function renderMergePreviewTab(
     <div class="global-toolbar">
       <span class="muted" data-role="global-stats"></span>
       <div class="toolbar-actions">
+        <label class="export-option"><input type="checkbox" data-role="include-recdata-checkbox" /> RecDataを含める</label>
         <button type="button" class="filter-btn primary-btn" data-role="export-xml-btn">統合XMLを書き出す</button>
         <button type="button" class="filter-btn" data-role="export-btn">選択状態をエクスポート(JSON)</button>
         <button type="button" class="filter-btn" data-role="import-btn">インポート…</button>
@@ -630,6 +631,7 @@ export function renderMergePreviewTab(
   const subPanelsEl = panel.querySelector<HTMLElement>('[data-role="sub-panels"]')!;
   const globalStatsEl = panel.querySelector<HTMLElement>('[data-role="global-stats"]')!;
   const exportXmlBtnEl = panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!;
+  const includeRecDataCheckboxEl = panel.querySelector<HTMLInputElement>('[data-role="include-recdata-checkbox"]')!;
   const srcSideSelectEl = panel.querySelector<HTMLSelectElement>('[data-role="src-side-select"]')!;
   const pairingListEl = panel.querySelector<HTMLElement>('[data-role="pairing-list"]')!;
   const destPicker = createObjectPicker("統合先のオブジェクトを検索…");
@@ -649,11 +651,13 @@ export function renderMergePreviewTab(
   }
 
   function refreshGlobalStats() {
+    const includeRecData = includeRecDataCheckboxEl.checked;
     const totals = subTabs.reduce(
       (acc, t) => {
         const s = listStats(t.items);
         acc.conflict += s.conflictCount;
-        acc.undecided += s.undecidedCount;
+        // RecDataを含めない場合、そこでの未決定は書き出しをブロックしない。
+        if (includeRecData || t.id !== "records") acc.undecided += s.undecidedCount;
         return acc;
       },
       { conflict: 0, undecided: 0 },
@@ -785,13 +789,16 @@ export function renderMergePreviewTab(
     alert(`統合しました。\n\n統合元: ${srcSide} ${srcSelected.label}\n統合先: ${destSide} ${destSelected.label.replace(/^[AB]: /, "")}\n\n競合するフィールドは統合元が優先されます。`);
   });
 
+  includeRecDataCheckboxEl.addEventListener("change", refreshGlobalStats);
+
   panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!.addEventListener("click", () => {
-    const { undecidedCount } = computeExportSummary(psets, objects, records);
+    const includeRecData = includeRecDataCheckboxEl.checked;
+    const { undecidedCount } = computeExportSummary(psets, objects, records, includeRecData);
     if (undecidedCount > 0) {
       alert(`未決定の競合が${undecidedCount}件あるため書き出せません。すべての競合でA/Bを選択してから、再度お試しください。`);
       return;
     }
-    const xml = buildExportXml(a, b, psets, objects, records);
+    const xml = buildExportXml(a, b, psets, objects, records, includeRecData);
     downloadText(`IFC_DataMapping_統合_${new Date().toISOString().slice(0, 10)}.xml`, xml, "application/xml");
   });
 
