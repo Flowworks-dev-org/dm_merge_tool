@@ -103,11 +103,22 @@ function extractObjects(root: Element): Map<string, ObjectDef> {
   if (!scheme) return map;
   for (const obj of Array.from(scheme.children)) {
     if (obj.tagName !== "Object") continue;
-    const objectName = attr(obj, "objectName");
-    const criteriaRaw = attr(obj, "criteria");
-    const key = `${objectName}||${criteriaRaw}`;
+    const def = extractSingleObject(obj);
+    map.set(def.key, def);
+  }
+  return map;
+}
 
-    const members: MemberDef[] = Array.from(obj.querySelectorAll("Member")).map((m) => {
+/**
+ * 1つの <Object> 要素からObjectDefを組み立てる。ファイル全体のパース(extractObjects)だけでなく、
+ * 統合(オブジェクトの手動ペアリング)で合成した <Object> 要素を再度ObjectDefへ変換する際にも使う。
+ */
+export function extractSingleObject(obj: Element): ObjectDef {
+  const objectName = attr(obj, "objectName");
+  const criteriaRaw = attr(obj, "criteria");
+  const key = `${objectName}||${criteriaRaw}`;
+
+  const members: MemberDef[] = Array.from(obj.querySelectorAll("Member")).map((m) => {
       const recordAncestor = m.closest("MappedRecord");
       const psetAncestor = m.closest("MappedPSet");
       const wrapperKind: "record" | "pset" | "direct" = recordAncestor ? "record" : psetAncestor ? "pset" : "direct";
@@ -140,24 +151,22 @@ function extractObjects(root: Element): Map<string, ObjectDef> {
       return { name: attr(ds, "name"), version: attr(ds, "version"), fields };
     });
 
-    map.set(key, {
-      key,
-      objectName,
-      objectLabel: attr(obj, "objectLabel"),
-      isEnabled: attr(obj, "isEnabled"),
-      mappingCategory: attr(obj, "mappingCategory"),
-      condition: attr(obj, "condition"),
-      conditionSecondary: attr(obj, "conditionSecondary"),
-      isChanged: attr(obj, "isChanged"),
-      hasCriteria: criteriaRaw.length > 0,
-      criteriaRaw,
-      members,
-      dataSheets,
-      raw: canonicalString(obj),
-      el: obj,
-    });
-  }
-  return map;
+  return {
+    key,
+    objectName,
+    objectLabel: attr(obj, "objectLabel"),
+    isEnabled: attr(obj, "isEnabled"),
+    mappingCategory: attr(obj, "mappingCategory"),
+    condition: attr(obj, "condition"),
+    conditionSecondary: attr(obj, "conditionSecondary"),
+    isChanged: attr(obj, "isChanged"),
+    hasCriteria: criteriaRaw.length > 0,
+    criteriaRaw,
+    members,
+    dataSheets,
+    raw: canonicalString(obj),
+    el: obj,
+  };
 }
 
 function extractRecords(root: Element): Map<string, RecordDef> {

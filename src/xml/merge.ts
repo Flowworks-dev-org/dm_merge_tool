@@ -7,6 +7,8 @@ import type {
   RecordDef,
   RecordFieldDef,
 } from "./model";
+import { extractSingleObject } from "./extract";
+import { buildObjectElement } from "./export";
 
 // 統合ポリシー: A(優先/FW製推奨)を常に採用し、Aに無い項目だけBで補う。
 // 両方に存在し内容が異なる場合も A を採用するが、その旨(conflict)を記録して可視化する。
@@ -158,24 +160,60 @@ export interface ManualPairing {
   destKey: string;
 }
 
+/**
+ * 同一ファイル内でのオブジェクト統合(srcSide === destSide)を実際に適用し、統合先のキーを
+ * 更新後のObjectDefで置き換え、統合元のキーを取り除いた新しいMapを返す。
+ * これにより、更新後のオブジェクトはこの後の通常の(もう片方のファイルとの)自動比較に
+ * そのまま乗る = 競合があれば通常通りA/B選択できる(統合元優先の自動解決にはならない)。
+ */
+function resolveSameFileObjectPairing(objMap: Map<string, ObjectDef>, destKey: string, srcKey: string): Map<string, ObjectDef> {
+  const destObj = objMap.get(destKey);
+  const srcObj = objMap.get(srcKey);
+  if (!destObj || !srcObj) return objMap;
+  const merged = mergeObjectPair(destObj, srcObj, destObj.key);
+  // 複製・差し替え処理を行うための一時ドキュメント(実際の書き出し先ではない)。
+  const tempDoc = document.implementation.createDocument(null, "root", null);
+  const consolidatedEl = buildObjectElement(tempDoc, merged);
+  const updatedDef = extractSingleObject(consolidatedEl); // key は destObj.key と一致するはず(objectName/criteria属性は統合先のまま)
+  const out = new Map(objMap);
+  out.delete(srcKey);
+  out.set(updatedDef.key, updatedDef);
+  return out;
+}
+
 /** mergeObjectsに、手動ペアリングによる例外的な組み合わせを適用したバージョン。 */
 export function mergeObjectsWithPairings(
   a: Map<string, ObjectDef>,
   b: Map<string, ObjectDef>,
   pairings: ManualPairing[],
 ): MergedObject[] {
+  let workingA = a;
+  let workingB = b;
+  const crossFilePairings: ManualPairing[] = [];
+
+  for (const p of pairings) {
+    if (p.srcSide === p.destSide) {
+      const target = p.destSide === "A" ? workingA : workingB;
+      const updated = resolveSameFileObjectPairing(target, p.destKey, p.srcKey);
+      if (p.destSide === "A") workingA = updated;
+      else workingB = updated;
+    } else {
+      crossFilePairings.push(p);
+    }
+  }
+
   const usedA = new Set<string>();
   const usedB = new Set<string>();
-  for (const p of pairings) {
+  for (const p of crossFilePairings) {
     (p.srcSide === "A" ? usedA : usedB).add(p.srcKey);
     (p.destSide === "A" ? usedA : usedB).add(p.destKey);
   }
-  const filteredA = new Map([...a].filter(([k]) => !usedA.has(k)));
-  const filteredB = new Map([...b].filter(([k]) => !usedB.has(k)));
+  const filteredA = new Map([...workingA].filter(([k]) => !usedA.has(k)));
+  const filteredB = new Map([...workingB].filter(([k]) => !usedB.has(k)));
   const out = mergeObjects(filteredA, filteredB);
-  for (const p of pairings) {
-    const srcObj = (p.srcSide === "A" ? a : b).get(p.srcKey);
-    const destObj = (p.destSide === "A" ? a : b).get(p.destKey);
+  for (const p of crossFilePairings) {
+    const srcObj = (p.srcSide === "A" ? workingA : workingB).get(p.srcKey);
+    const destObj = (p.destSide === "A" ? workingA : workingB).get(p.destKey);
     if (destObj && srcObj) out.push(mergeObjectPair(destObj, srcObj, `pair::src:${p.srcSide}:${p.srcKey}=>dest:${p.destSide}:${p.destKey}`));
   }
   return out.sort((x, y) => x.objectName.localeCompare(y.objectName));

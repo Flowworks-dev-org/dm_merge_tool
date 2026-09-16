@@ -574,9 +574,7 @@ export function renderMergePreviewTab(
     <details class="pairing-panel">
       <summary>オブジェクトの統合(オブジェクトの設定を異なるオブジェクトに移動・統合)</summary>
       <p class="muted" style="margin:6px 0 10px;">
-        例: Bの「スペース」の設定を、Aの独自オブジェクトに移動・統合できます(名前が一致していなくても可)。
-        統合元(移動するデータ側)はA/Bを選んで検索します。統合先(移動される側)はA/B問わず、全オブジェクトから検索して選べます。
-        統合元と統合先の両方にある同名フィールドは、常に統合元が優先されて統合先を置き換えます。
+        統合元(移動するデータ)・統合先(移動される側)を検索して選び、「統合する」で1つにまとめます。名前が一致していなくても可。競合するフィールドは常に統合元が優先されます。
       </p>
       <div class="pairing-controls">
         <div class="pair-slot">
@@ -768,6 +766,7 @@ export function renderMergePreviewTab(
     destPicker.reset();
     srcPicker.reset();
     rebuildTabs();
+    alert(`統合しました。\n\n統合元: ${srcSide} ${srcSelected.label}\n統合先: ${destSide} ${destSelected.label.replace(/^[AB]: /, "")}\n\n競合するフィールドは統合元が優先されます。`);
   });
 
   panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!.addEventListener("click", () => {

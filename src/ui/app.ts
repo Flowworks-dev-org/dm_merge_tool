@@ -47,7 +47,7 @@ function renderSummary(
 export function mountApp(root: HTMLElement) {
   root.innerHTML = `
     <header class="app-header">
-      <h1>IFC Data Manager 統合ツール</h1>
+      <h1>Vectorworks Data Manager 統合ツール</h1>
       <p class="muted">
         Vectorworks の「データマネージャ」から書き出した2つのIFCマッピング設定XMLを読み込み、差分を可視化・統合プレビューします。
         ファイルはすべてブラウザ内で処理され、どこにも送信されません。
