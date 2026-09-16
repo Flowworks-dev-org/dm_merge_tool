@@ -44,9 +44,49 @@ function groupBy<T>(items: T[], keyFn: (x: T) => string): Map<string, T[]> {
 
 // ============ 各カテゴリ → PreviewItem 変換 ============
 
+// Member.DataSource(フィールドマッピング式)は、Vectorworks内部でトークン化された
+// バイナリ(base64)として保存されており、演算子までは復元できない。ただし式が参照する
+// レコード名・フィールド名はUTF-16LEの文字列としてそのまま埋め込まれているため、
+// それだけを抜き出して「どのフィールドを参照する式か」の手がかりとして表示する。
+function decodeOpaqueReferencedTokens(base64: string): string[] {
+  if (!base64.trim()) return [];
+  let bin: string;
+  try {
+    bin = atob(base64.trim());
+  } catch {
+    return [];
+  }
+  const tokens: string[] = [];
+  let cur = "";
+  for (let i = 0; i + 1 < bin.length; i += 2) {
+    const code = bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8);
+    const isPrintableAscii = code >= 0x20 && code < 0x7f;
+    const isCjk = (code >= 0x3040 && code < 0x30ff) || (code >= 0x4e00 && code < 0x9fff) || (code >= 0xff00 && code < 0xffef);
+    if (isPrintableAscii || isCjk) {
+      cur += String.fromCharCode(code);
+    } else {
+      if (cur.length >= 2) tokens.push(cur);
+      cur = "";
+    }
+  }
+  if (cur.length >= 2) tokens.push(cur);
+  return tokens;
+}
+
 /** フィールドの全属性(DOM要素参照を除く)をそのままダンプする。表示用テキストには出ない内部値(DataSourceなど)を確認するためのもの。 */
 function rawFieldDump(v: unknown): string {
-  return JSON.stringify(v, (k, val) => (k === "el" ? undefined : val), 2);
+  return JSON.stringify(
+    v,
+    (k, val) => {
+      if (k === "el") return undefined;
+      if (k === "dataSource" && typeof val === "string" && val) {
+        const tokens = decodeOpaqueReferencedTokens(val);
+        return tokens.length ? { 参照フィールド: tokens, raw: val } : val;
+      }
+      return val;
+    },
+    2,
+  );
 }
 
 function pSetFieldValueText(v: unknown): string {
