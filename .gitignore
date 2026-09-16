@@ -1,0 +1,21 @@
+logs
+*.log
+npm-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 社内の実データ(非公開テンプレート)。動作確認用に一時配置するだけで絶対にコミットしない。
+public/test-data/
