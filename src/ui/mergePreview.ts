@@ -827,7 +827,7 @@ export function renderMergePreviewTab(
       return;
     }
     const xml = buildExportXml(a, b, psets, objects, includedRecords);
-    downloadText(`IFC_DataMapping_統合_${new Date().toISOString().slice(0, 10)}.xml`, xml, "application/xml");
+    downloadText(`IFC_DM_統合_${new Date().toISOString().slice(0, 10)}.xml`, xml, "application/xml");
   });
 
   panel.querySelector<HTMLButtonElement>('[data-role="export-btn"]')!.addEventListener("click", () => {
