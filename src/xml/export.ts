@@ -193,20 +193,13 @@ export interface ExportSummary {
   undecidedCount: number;
 }
 
-export function computeExportSummary(
-  psets: MergedPSet[],
-  objects: MergedObject[],
-  records: MergedRecord[],
-  includeRecData = true,
-): ExportSummary {
+export function computeExportSummary(psets: MergedPSet[], objects: MergedObject[], records: MergedRecord[]): ExportSummary {
   let undecidedCount = 0;
   const countUndecided = (prefix: string, key: string, ns: string, fkey: string) => {
     if (!decisionStore.get(`${prefix}::${key}::${ns}::${fkey}`)) undecidedCount++;
   };
   for (const p of psets) for (const f of p.fields) if (f.conflict) countUndecided("psets", p.key, "field", f.key);
-  if (includeRecData) {
-    for (const r of records) for (const f of r.fields) if (f.conflict) countUndecided("records", r.key, "field", f.key);
-  }
+  for (const r of records) for (const f of r.fields) if (f.conflict) countUndecided("records", r.key, "field", f.key);
   for (const o of objects) {
     if (o.isManualPair) continue; // 手動統合は常に統合元優先で自動解決されるため未決定にはならない
     for (const m of o.members) if (m.conflict) countUndecided("objects", o.key, "member", m.key);
@@ -221,7 +214,6 @@ export function buildExportXml(
   psets: MergedPSet[],
   objects: MergedObject[],
   records: MergedRecord[],
-  includeRecData = true,
 ): string {
   const doc = document.implementation.createDocument(null, "IFC_DataMapping", null);
   const root = doc.documentElement;
@@ -241,11 +233,9 @@ export function buildExportXml(
   for (const o of objects) schemeEl.appendChild(buildObjectElement(doc, o));
   root.appendChild(schemeEl);
 
-  if (includeRecData) {
-    const recDataEl = doc.createElement("RecData");
-    for (const r of records) recDataEl.appendChild(buildRecordElement(doc, r));
-    root.appendChild(recDataEl);
-  }
+  const recDataEl = doc.createElement("RecData");
+  for (const r of records) recDataEl.appendChild(buildRecordElement(doc, r));
+  root.appendChild(recDataEl);
 
   const xml = new XMLSerializer().serializeToString(doc);
   return '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n' + xml;

@@ -4,6 +4,7 @@ import type { MemberDef, DataSheetFieldDef, PSetFieldDef, RecordFieldDef, Parsed
 import { mappingCategoryLabel } from "../xml/category";
 import { decisionStore, type Choice } from "../state/decisions";
 import { pairingStore, type Side } from "../state/pairings";
+import { recordExportStore } from "../state/recordExport";
 import { buildExportXml, computeExportSummary } from "../xml/export";
 import { escapeHtml, truncate } from "./util";
 
@@ -27,6 +28,8 @@ interface PreviewItem {
   sections: FieldSection[];
   /** 手動統合(オブジェクトの移動・統合)で作られた項目か。競合は常に統合元優先で自動解決され、選択UIは出さない。 */
   isManualPair?: boolean;
+  /** RecDataのレコードの場合のみ設定。書き出しに含めるかどうかのチェックボックスを表示するための情報。 */
+  recordExport?: { key: string; name: string };
 }
 
 function groupBy<T>(items: T[], keyFn: (x: T) => string): Map<string, T[]> {
@@ -93,6 +96,7 @@ function recordToItem(r: MergedRecord): PreviewItem {
     title: r.name,
     bothPresent: r.bothPresent,
     source: r.source,
+    recordExport: { key: r.key, name: r.name },
     sections: [
       {
         sectionTitle: "フィールド",
@@ -321,8 +325,21 @@ function renderItemToggle(item: PreviewItem, onDecisionChange: () => void): HTML
   details.className = "item-toggle";
 
   const summary = document.createElement("summary");
-  summary.innerHTML = `<span class="row-label">${escapeHtml(truncate(item.title, 70))}</span>${item.subtitle ? `<span class="row-sublabel">${escapeHtml(item.subtitle)}</span>` : ""}<span class="item-badge">${itemBadgeHtml(item)}</span>`;
+  const exportCheckboxHtml = item.recordExport
+    ? `<label class="record-export-check" title="書き出しXMLに含める"><input type="checkbox" data-role="record-export-checkbox"${recordExportStore.isIncluded(item.recordExport.key, item.recordExport.name) ? " checked" : ""} />書き出しに含める</label>`
+    : "";
+  summary.innerHTML = `${exportCheckboxHtml}<span class="row-label">${escapeHtml(truncate(item.title, 70))}</span>${item.subtitle ? `<span class="row-sublabel">${escapeHtml(item.subtitle)}</span>` : ""}<span class="item-badge">${itemBadgeHtml(item)}</span>`;
   details.appendChild(summary);
+
+  if (item.recordExport) {
+    const { key, name } = item.recordExport;
+    const checkbox = summary.querySelector<HTMLInputElement>('[data-role="record-export-checkbox"]')!;
+    checkbox.addEventListener("click", (e) => e.stopPropagation());
+    checkbox.addEventListener("change", () => {
+      recordExportStore.setIncluded(key, name, checkbox.checked);
+      onDecisionChange();
+    });
+  }
 
   const content = document.createElement("div");
   content.className = "item-content";
@@ -366,12 +383,16 @@ function renderItemToggle(item: PreviewItem, onDecisionChange: () => void): HTML
   return details;
 }
 
+const RECORD_EXPORT_NOTE =
+  "統合XMLに保存する(書き出しに含める)レコードはチェックしてください。「VBS」が付くレコードはVWJ社の標準レコードのため、チェックあり(含める)を推奨します。それ以外はファイルごとに内容が異なるため、既定ではチェックなしにしています。";
+
 // ============ 一覧パネル(検索付きトグルリスト) ============
 
-function renderItemListPanel(items: PreviewItem[], onDecisionChange: () => void): HTMLElement {
+function renderItemListPanel(items: PreviewItem[], onDecisionChange: () => void, noteHtml?: string): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "preview-list-panel";
   wrap.innerHTML = `
+    ${noteHtml ? `<p class="muted panel-note">${noteHtml}</p>` : ""}
     <input type="search" class="search-box" placeholder="名前で絞り込み…" />
     <div class="bulk-toolbar" data-role="tab-bulk-toolbar"></div>
   `;
@@ -615,7 +636,6 @@ export function renderMergePreviewTab(
     <div class="global-toolbar">
       <span class="muted" data-role="global-stats"></span>
       <div class="toolbar-actions">
-        <label class="export-option"><input type="checkbox" data-role="include-recdata-checkbox" /> RecDataを含める</label>
         <button type="button" class="filter-btn primary-btn" data-role="export-xml-btn">統合XMLを書き出す</button>
         <button type="button" class="filter-btn" data-role="export-btn">選択状態をエクスポート(JSON)</button>
         <button type="button" class="filter-btn" data-role="import-btn">インポート…</button>
@@ -631,7 +651,6 @@ export function renderMergePreviewTab(
   const subPanelsEl = panel.querySelector<HTMLElement>('[data-role="sub-panels"]')!;
   const globalStatsEl = panel.querySelector<HTMLElement>('[data-role="global-stats"]')!;
   const exportXmlBtnEl = panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!;
-  const includeRecDataCheckboxEl = panel.querySelector<HTMLInputElement>('[data-role="include-recdata-checkbox"]')!;
   const srcSideSelectEl = panel.querySelector<HTMLSelectElement>('[data-role="src-side-select"]')!;
   const pairingListEl = panel.querySelector<HTMLElement>('[data-role="pairing-list"]')!;
   const destPicker = createObjectPicker("統合先のオブジェクトを検索…");
@@ -650,21 +669,32 @@ export function renderMergePreviewTab(
     refreshGlobalStats();
   }
 
+  // 書き出し対象外(チェックなし)のレコードにある未決定競合は、書き出しをブロックしない。
+  function exportBlockingUndecidedCount(): number {
+    let n = 0;
+    for (const t of subTabs) {
+      for (const item of t.items) {
+        if (item.recordExport && !recordExportStore.isIncluded(item.recordExport.key, item.recordExport.name)) continue;
+        n += itemStats(item).undecidedCount;
+      }
+    }
+    return n;
+  }
+
   function refreshGlobalStats() {
-    const includeRecData = includeRecDataCheckboxEl.checked;
     const totals = subTabs.reduce(
       (acc, t) => {
         const s = listStats(t.items);
         acc.conflict += s.conflictCount;
-        // RecDataを含めない場合、そこでの未決定は書き出しをブロックしない。
-        if (includeRecData || t.id !== "records") acc.undecided += s.undecidedCount;
+        acc.undecided += s.undecidedCount;
         return acc;
       },
       { conflict: 0, undecided: 0 },
     );
     globalStatsEl.textContent = `全体: 競合 ${totals.conflict}件 / 未決定 ${totals.undecided}件 / 選択保存済み ${decisionStore.size}件`;
-    exportXmlBtnEl.disabled = totals.undecided > 0;
-    exportXmlBtnEl.title = totals.undecided > 0 ? `未決定の競合が${totals.undecided}件あるため書き出せません` : "";
+    const blocking = exportBlockingUndecidedCount();
+    exportXmlBtnEl.disabled = blocking > 0;
+    exportXmlBtnEl.title = blocking > 0 ? `書き出し対象の未決定競合が${blocking}件あるため書き出せません` : "";
   }
 
   function objectsForSide(side: Side): Map<string, ObjectDef> {
@@ -722,7 +752,7 @@ export function renderMergePreviewTab(
       tabButtons.set(tab.id, btn);
       refreshTabButton(tab);
 
-      const tabPanel = renderItemListPanel(tab.items, () => refreshTabButton(tab));
+      const tabPanel = renderItemListPanel(tab.items, () => refreshTabButton(tab), tab.id === "records" ? RECORD_EXPORT_NOTE : undefined);
       tabPanel.hidden = true;
       subPanelsEl.appendChild(tabPanel);
       tabPanels.set(tab.id, tabPanel);
@@ -754,7 +784,7 @@ export function renderMergePreviewTab(
     subTabs.forEach(refreshTabButton);
     tabPanels.forEach((p, id) => {
       const tab = subTabs.find((t) => t.id === id)!;
-      const fresh = renderItemListPanel(tab.items, () => refreshTabButton(tab));
+      const fresh = renderItemListPanel(tab.items, () => refreshTabButton(tab), tab.id === "records" ? RECORD_EXPORT_NOTE : undefined);
       fresh.hidden = p.hidden;
       p.replaceWith(fresh);
       tabPanels.set(id, fresh);
@@ -789,16 +819,14 @@ export function renderMergePreviewTab(
     alert(`統合しました。\n\n統合元: ${srcSide} ${srcSelected.label}\n統合先: ${destSide} ${destSelected.label.replace(/^[AB]: /, "")}\n\n競合するフィールドは統合元が優先されます。`);
   });
 
-  includeRecDataCheckboxEl.addEventListener("change", refreshGlobalStats);
-
   panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!.addEventListener("click", () => {
-    const includeRecData = includeRecDataCheckboxEl.checked;
-    const { undecidedCount } = computeExportSummary(psets, objects, records, includeRecData);
+    const includedRecords = records.filter((r) => recordExportStore.isIncluded(r.key, r.name));
+    const { undecidedCount } = computeExportSummary(psets, objects, includedRecords);
     if (undecidedCount > 0) {
       alert(`未決定の競合が${undecidedCount}件あるため書き出せません。すべての競合でA/Bを選択してから、再度お試しください。`);
       return;
     }
-    const xml = buildExportXml(a, b, psets, objects, records, includeRecData);
+    const xml = buildExportXml(a, b, psets, objects, includedRecords);
     downloadText(`IFC_DataMapping_統合_${new Date().toISOString().slice(0, 10)}.xml`, xml, "application/xml");
   });
 

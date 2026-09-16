@@ -417,13 +417,19 @@ body {
   gap: 6px;
   flex-wrap: wrap;
 }
-.export-option {
-  display: flex;
+.panel-note {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.record-export-check {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: normal;
   color: var(--text);
-  margin-right: 4px;
+  margin-right: 10px;
+  cursor: pointer;
 }
 .sub-tabs {
   display: flex;
