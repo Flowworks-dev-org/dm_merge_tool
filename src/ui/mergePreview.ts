@@ -768,6 +768,7 @@ export function renderMergePreviewTab(
     destPicker.reset();
     srcPicker.reset();
     rebuildTabs();
+    alert(`統合しました。\n\n統合元: ${srcSide} ${srcSelected.label}\n統合先: ${destSide} ${destSelected.label.replace(/^[AB]: /, "")}\n\n競合するフィールドは統合元が優先されます。`);
   });
 
   panel.querySelector<HTMLButtonElement>('[data-role="export-xml-btn"]')!.addEventListener("click", () => {
