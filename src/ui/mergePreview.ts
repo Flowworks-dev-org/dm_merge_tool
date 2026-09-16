@@ -41,6 +41,11 @@ function groupBy<T>(items: T[], keyFn: (x: T) => string): Map<string, T[]> {
 
 // ============ 各カテゴリ → PreviewItem 変換 ============
 
+/** フィールドの全属性(DOM要素参照を除く)をそのままダンプする。表示用テキストには出ない内部値(DataSourceなど)を確認するためのもの。 */
+function rawFieldDump(v: unknown): string {
+  return JSON.stringify(v, (k, val) => (k === "el" ? undefined : val), 2);
+}
+
 function pSetFieldValueText(v: unknown): string {
   const f = v as PSetFieldDef;
   return `${f.dataType}${f.unit && f.unit !== "0" ? ` (Unit:${f.unit})` : ""}`;
@@ -53,7 +58,8 @@ function memberValueText(v: unknown): string {
 
 function dsFieldValueText(v: unknown): string {
   const f = v as DataSheetFieldDef;
-  return `${f.sourceChild || "(なし)"}.${f.sourceField || "(なし)"} (mapped=${f.hasMapping})`;
+  const parent = f.sourceParent ? `${f.sourceParent}.` : "";
+  return `${parent}${f.sourceChild || "(なし)"}.${f.sourceField || "(なし)"} (mapped=${f.hasMapping}, visible=${f.isVisible}, enabled=${f.isEnabled}${f.type ? `, type=${f.type}` : ""})`;
 }
 
 function recordFieldValueText(v: unknown): string {
@@ -191,6 +197,15 @@ function fieldRowHtml(item: PreviewItem, section: FieldSection, f: MergedField<u
   if (!f.conflict) {
     return `<tr><td>${label}</td><td colspan="2">${escapeHtml(section.valueText(f.a))}</td><td>${badge("same", "一致")}</td></tr>`;
   }
+  // 競合判定は全属性(表示外のものも含む)を見て行っているため、画面表示上のテキストが
+  // A/Bで同じに見えるのに競合と判定される場合がある。その旨を注記し、必要なら生の値を開いて確認できるようにする。
+  const hiddenDiffNote =
+    section.valueText(f.a) === section.valueText(f.b)
+      ? `<details class="hidden-diff-note">
+          <summary class="muted">※表示されていない内部項目(マッピング先など)に差分があります(詳細を表示)</summary>
+          <pre class="raw-dump">A: ${escapeHtml(rawFieldDump(f.a))}\nB: ${escapeHtml(rawFieldDump(f.b))}</pre>
+        </details>`
+      : "";
   if (item.isManualPair) {
     // 手動統合は常に統合元優先で自動解決するため、選択UIは出さず結果のみ表示する。
     return `<tr class="auto-resolved-row">
@@ -198,6 +213,7 @@ function fieldRowHtml(item: PreviewItem, section: FieldSection, f: MergedField<u
       <td colspan="2">
         統合元を採用: ${escapeHtml(section.valueText(f.b))}
         <span class="muted">(統合先の元の値: ${escapeHtml(section.valueText(f.a))})</span>
+        ${hiddenDiffNote}
       </td>
       <td>${badge("resolved", "上書き")}</td>
     </tr>`;
@@ -205,7 +221,7 @@ function fieldRowHtml(item: PreviewItem, section: FieldSection, f: MergedField<u
   const dKey = `${item.decisionPrefix}::${section.ns}::${f.key}`;
   const choice = decisionStore.get(dKey);
   return `<tr class="conflict-row" data-decision-key="${escapeHtml(dKey)}">
-    <td>${label}</td>
+    <td>${label}${hiddenDiffNote}</td>
     <td><button type="button" class="choice-btn${choice === "A" ? " selected" : ""}" data-choice="A">A: ${escapeHtml(section.valueText(f.a))}</button></td>
     <td><button type="button" class="choice-btn${choice === "B" ? " selected" : ""}" data-choice="B">B: ${escapeHtml(section.valueText(f.b))}</button></td>
     <td class="status-cell">${choice ? badge("resolved", "選択済み") : badge("diff", "未選択")}</td>
