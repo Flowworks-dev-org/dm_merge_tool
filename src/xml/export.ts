@@ -94,9 +94,12 @@ function findWrapperInMfo(mfo: Element, kind: "record" | "pset" | "direct", name
 /**
  * 統合元(isManualPair時は常に統合元優先で解決)をもとに、統合先の複製要素へ差分を適用する。
  * 通常の書き出し処理だけでなく、同一ファイル内でのオブジェクト統合(pre-merge)でも再利用する。
+ * overrideIsEnabledを指定すると、Objectの isEnabled(データマネージャの「適用」チェック)を
+ * 元データの値に関わらずその値で上書きする(最終書き出し時のみ使用。pre-merge時は指定しない)。
  */
-export function buildObjectElement(doc: Document, o: MergedObject): Element {
+export function buildObjectElement(doc: Document, o: MergedObject, overrideIsEnabled?: boolean): Element {
   const clone = doc.importNode(o.el, true) as Element;
+  if (overrideIsEnabled !== undefined) clone.setAttribute("isEnabled", overrideIsEnabled ? "true" : "false");
   // 手動統合(オブジェクトの移動・統合)で作られた項目は、競合を常に統合元優先で自動解決する。
   const forceB = !!o.isManualPair;
 
@@ -214,6 +217,7 @@ export function buildExportXml(
   psets: MergedPSet[],
   objects: MergedObject[],
   records: MergedRecord[],
+  objectEnabledOverrides?: Map<string, boolean>,
 ): string {
   const doc = document.implementation.createDocument(null, "IFC_DataMapping", null);
   const root = doc.documentElement;
@@ -230,7 +234,7 @@ export function buildExportXml(
   schemeEl.setAttribute("IfcScheme", a.ifcScheme || b.ifcScheme || "2x3");
   const criteriaOrderSrc = a.criteriaOrderEl ?? b.criteriaOrderEl;
   if (criteriaOrderSrc) schemeEl.appendChild(doc.importNode(criteriaOrderSrc, true));
-  for (const o of objects) schemeEl.appendChild(buildObjectElement(doc, o));
+  for (const o of objects) schemeEl.appendChild(buildObjectElement(doc, o, objectEnabledOverrides?.get(o.key)));
   root.appendChild(schemeEl);
 
   const recDataEl = doc.createElement("RecData");

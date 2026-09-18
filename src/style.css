@@ -95,6 +95,10 @@ body {
   font-size: 13px;
   word-break: break-all;
 }
+[data-role="skip-b-btn"] {
+  margin-top: 10px;
+  font-size: 12px;
+}
 .upload-status.ok {
   color: var(--same);
   opacity: 1;
@@ -421,7 +425,8 @@ body {
   font-size: 12px;
   margin: 0 0 8px;
 }
-.record-export-check {
+.record-export-check,
+.object-enabled-check {
   display: inline-flex;
   align-items: center;
   gap: 4px;

@@ -5,6 +5,7 @@ import { mappingCategoryLabel } from "../xml/category";
 import { decisionStore, type Choice } from "../state/decisions";
 import { pairingStore, type Side } from "../state/pairings";
 import { recordExportStore } from "../state/recordExport";
+import { objectEnabledStore } from "../state/objectEnabled";
 import { buildExportXml, computeExportSummary } from "../xml/export";
 import { escapeHtml, truncate } from "./util";
 
@@ -30,6 +31,8 @@ interface PreviewItem {
   isManualPair?: boolean;
   /** RecDataのレコードの場合のみ設定。書き出しに含めるかどうかのチェックボックスを表示するための情報。 */
   recordExport?: { key: string; name: string };
+  /** オブジェクトの場合のみ設定。有効/無効(データマネージャの「適用」)を切り替えるチェックボックス用の情報。 */
+  objectEnabled?: { key: string; defaultEnabled: boolean };
 }
 
 function groupBy<T>(items: T[], keyFn: (x: T) => string): Map<string, T[]> {
@@ -162,6 +165,7 @@ function objectToItem(o: MergedObject): PreviewItem {
     bothPresent: o.bothPresent,
     source: o.source,
     isManualPair: o.isManualPair,
+    objectEnabled: { key: o.key, defaultEnabled: o.isEnabled !== "false" },
     sections: [
       {
         sectionTitle: "属性マッピング(Member)",
@@ -370,7 +374,10 @@ function renderItemToggle(item: PreviewItem, onDecisionChange: () => void): HTML
   const exportCheckboxHtml = item.recordExport
     ? `<label class="record-export-check" title="書き出しXMLに含める"><input type="checkbox" data-role="record-export-checkbox"${recordExportStore.isIncluded(item.recordExport.key, item.recordExport.name) ? " checked" : ""} />書き出しに含める</label>`
     : "";
-  summary.innerHTML = `${exportCheckboxHtml}<span class="row-label">${escapeHtml(truncate(item.title, 70))}</span>${item.subtitle ? `<span class="row-sublabel">${escapeHtml(item.subtitle)}</span>` : ""}<span class="item-badge">${itemBadgeHtml(item)}</span>`;
+  const enabledCheckboxHtml = item.objectEnabled
+    ? `<label class="object-enabled-check" title="データマネージャの「適用」チェックに相当"><input type="checkbox" data-role="object-enabled-checkbox"${objectEnabledStore.isEnabled(item.objectEnabled.key, item.objectEnabled.defaultEnabled) ? " checked" : ""} />有効</label>`
+    : "";
+  summary.innerHTML = `${exportCheckboxHtml}${enabledCheckboxHtml}<span class="row-label">${escapeHtml(truncate(item.title, 70))}</span>${item.subtitle ? `<span class="row-sublabel">${escapeHtml(item.subtitle)}</span>` : ""}<span class="item-badge">${itemBadgeHtml(item)}</span>`;
   details.appendChild(summary);
 
   if (item.recordExport) {
@@ -379,6 +386,16 @@ function renderItemToggle(item: PreviewItem, onDecisionChange: () => void): HTML
     checkbox.addEventListener("click", (e) => e.stopPropagation());
     checkbox.addEventListener("change", () => {
       recordExportStore.setIncluded(key, name, checkbox.checked);
+      onDecisionChange();
+    });
+  }
+
+  if (item.objectEnabled) {
+    const { key, defaultEnabled } = item.objectEnabled;
+    const checkbox = summary.querySelector<HTMLInputElement>('[data-role="object-enabled-checkbox"]')!;
+    checkbox.addEventListener("click", (e) => e.stopPropagation());
+    checkbox.addEventListener("change", () => {
+      objectEnabledStore.setEnabled(key, defaultEnabled, checkbox.checked);
       onDecisionChange();
     });
   }
@@ -869,7 +886,8 @@ export function renderMergePreviewTab(
       alert(`未決定の競合が${undecidedCount}件あるため書き出せません。すべての競合でA/Bを選択してから、再度お試しください。`);
       return;
     }
-    const xml = buildExportXml(a, b, psets, objects, includedRecords);
+    const objectEnabledOverrides = new Map(objects.map((o) => [o.key, objectEnabledStore.isEnabled(o.key, o.isEnabled !== "false")]));
+    const xml = buildExportXml(a, b, psets, objects, includedRecords, objectEnabledOverrides);
     downloadText(`IFC_DM_統合_${new Date().toISOString().slice(0, 10)}.xml`, xml, "application/xml");
   });
 
