@@ -561,3 +561,37 @@ body {
 .auto-resolved-row td {
   background: color-mix(in srgb, var(--same) 8%, transparent);
 }
+
+.changelog {
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.changelog summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-h);
+}
+.changelog-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.changelog-list li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.changelog-date {
+  flex: 0 0 auto;
+  color: var(--text);
+  opacity: 0.65;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.changelog-summary {
+  flex: 1 1 auto;
+}
