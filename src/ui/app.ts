@@ -61,6 +61,7 @@ export function mountApp(root: HTMLElement) {
       <div class="upload-box" data-role="upload-b">
         <label>データマネージャ設定B(xml・VWJ製等)<input type="file" accept=".xml" data-role="file-b" /></label>
         <p class="upload-status muted" data-role="status-b">未選択</p>
+        <button type="button" class="filter-btn" data-role="skip-b-btn">Bを使わずAのみで進める(Aの再設定用)</button>
       </div>
     </section>
     <p class="error-msg" data-role="error" hidden></p>
@@ -73,6 +74,21 @@ export function mountApp(root: HTMLElement) {
   let docA: ParsedDataManager | null = null;
   let docB: ParsedDataManager | null = null;
   const errorEl = root.querySelector<HTMLElement>('[data-role="error"]')!;
+
+  /** Bを使わない場合の空データ。全項目がAのみ(onlyA)として扱われ、競合は発生しない。 */
+  function createEmptyDataManager(): ParsedDataManager {
+    return {
+      fileName: "",
+      sourceFileName: "(未使用)",
+      version: "",
+      ifcScheme: "",
+      customPSetsVersion: "",
+      criteriaOrderEl: null,
+      psets: new Map(),
+      objects: new Map(),
+      records: new Map(),
+    };
+  }
 
   function showError(msg: string | null) {
     if (!msg) {
@@ -111,6 +127,16 @@ export function mountApp(root: HTMLElement) {
   root.querySelector<HTMLInputElement>('[data-role="file-b"]')!.addEventListener("change", (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (f) handleFile("b", f);
+  });
+  root.querySelector<HTMLButtonElement>('[data-role="skip-b-btn"]')!.addEventListener("click", () => {
+    docB = createEmptyDataManager();
+    const statusEl = root.querySelector<HTMLElement>('[data-role="status-b"]')!;
+    statusEl.textContent = "(未使用: Aのみで進めます)";
+    statusEl.classList.remove("error", "ok");
+    statusEl.classList.add("muted");
+    root.querySelector<HTMLInputElement>('[data-role="file-b"]')!.value = "";
+    showError(null);
+    if (docA) buildResults(docA, docB);
   });
 
   function buildResults(a: ParsedDataManager, b: ParsedDataManager) {
