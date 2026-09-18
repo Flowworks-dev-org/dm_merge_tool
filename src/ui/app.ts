@@ -4,6 +4,20 @@ import { diffMaps, countByStatus, type DiffRow } from "../xml/diff";
 import { escapeHtml } from "./util";
 import { mergePSets, mergeRecords } from "../xml/merge";
 import { renderMergePreviewTab } from "./mergePreview";
+import { CHANGELOG } from "../changelog";
+
+function renderChangelogHtml(): string {
+  const rows = CHANGELOG.slice()
+    .reverse()
+    .map((e) => `<li><span class="changelog-date">${escapeHtml(e.date)}</span><span class="changelog-summary">${escapeHtml(e.summary)}</span></li>`)
+    .join("");
+  return `
+    <details class="changelog">
+      <summary>改定履歴</summary>
+      <ul class="changelog-list">${rows}</ul>
+    </details>
+  `;
+}
 
 function renderSummary(
   psetRows: DiffRow<PSetDef>[],
@@ -69,6 +83,7 @@ export function mountApp(root: HTMLElement) {
       <nav class="tabs" data-role="tabs"></nav>
       <div class="tab-panels" data-role="panels"></div>
     </section>
+    ${renderChangelogHtml()}
   `;
 
   let docA: ParsedDataManager | null = null;
